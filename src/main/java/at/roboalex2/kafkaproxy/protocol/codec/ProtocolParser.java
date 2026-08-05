@@ -14,10 +14,10 @@ import org.springframework.stereotype.Component;
 
 /** Version-aware header and body codec backed by Kafka's generated schemas. */
 @Component
-public class ProtocolCodecRegistry {
+public class ProtocolParser {
     private final ProtocolModelMapper modelMapper;
 
-    public ProtocolCodecRegistry(ProtocolModelMapper modelMapper) {
+    public ProtocolParser(ProtocolModelMapper modelMapper) {
         this.modelMapper = modelMapper;
     }
 

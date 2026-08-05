@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 /** Shared virtual-thread executor; each connection supplies its own serial task queue. */
 @Component
-public class ProtocolInspectionExecutor {
+public class VirtualThreadExecutor {
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public void execute(Runnable task) {

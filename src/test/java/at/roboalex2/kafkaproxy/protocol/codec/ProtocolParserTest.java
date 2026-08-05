@@ -15,8 +15,8 @@ import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.junit.jupiter.api.Test;
 
-class ProtocolCodecRegistryTest {
-    private final ProtocolCodecRegistry codecs = new ProtocolCodecRegistry(new ProtocolModelMapper());
+class ProtocolParserTest {
+    private final ProtocolParser codecs = new ProtocolParser(new ProtocolModelMapper());
 
     @Test
     void parsesEveryRequiredRequestAndResponseVersion() {

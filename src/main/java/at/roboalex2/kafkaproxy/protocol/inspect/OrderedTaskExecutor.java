@@ -3,12 +3,12 @@ package at.roboalex2.kafkaproxy.protocol.inspect;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-class OrderedConnectionExecutor {
-    private final ProtocolInspectionExecutor executor;
+class OrderedTaskExecutor {
+    private final VirtualThreadExecutor executor;
     private final Queue<Runnable> tasks = new ArrayDeque<>();
     private boolean running;
 
-    OrderedConnectionExecutor(ProtocolInspectionExecutor executor) {
+    OrderedTaskExecutor(VirtualThreadExecutor executor) {
         this.executor = executor;
     }
 

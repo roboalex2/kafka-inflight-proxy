@@ -3,9 +3,9 @@ package at.roboalex2.kafkaproxy.network;
 import at.roboalex2.kafkaproxy.config.Endpoint;
 import at.roboalex2.kafkaproxy.config.KafkaProxyProperties;
 import at.roboalex2.kafkaproxy.logging.ConnectionLogWriterFactory;
-import at.roboalex2.kafkaproxy.protocol.codec.ProtocolCodecRegistry;
+import at.roboalex2.kafkaproxy.protocol.codec.ProtocolParser;
 import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContextFactory;
-import at.roboalex2.kafkaproxy.protocol.inspect.ProtocolInspectionExecutor;
+import at.roboalex2.kafkaproxy.protocol.inspect.VirtualThreadExecutor;
 import at.roboalex2.kafkaproxy.protocol.mapping.ProtocolModelMapper;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -14,7 +14,7 @@ final class ProxyTestHarness implements AutoCloseable {
     private final int listenPort;
     private final DefaultConnectionRegistry connectionRegistry;
     private final NettyKafkaProxyServer server;
-    private final ProtocolInspectionExecutor inspectionExecutor;
+    private final VirtualThreadExecutor inspectionExecutor;
 
     ProxyTestHarness(int listenPort, int brokerPort) {
         this(listenPort, brokerPort, null);
@@ -35,9 +35,9 @@ final class ProxyTestHarness implements AutoCloseable {
         BrokerChannelInitializer brokerInitializer = new BrokerChannelInitializer(properties);
         BrokerConnectionFactory brokerConnectionFactory =
                 new NettyBrokerConnectionFactory(properties, brokerInitializer);
-        inspectionExecutor = new ProtocolInspectionExecutor();
+        inspectionExecutor = new VirtualThreadExecutor();
         ConnectionProtocolContextFactory protocolContextFactory = new ConnectionProtocolContextFactory(
-                new ProtocolCodecRegistry(new ProtocolModelMapper()),
+                new ProtocolParser(new ProtocolModelMapper()),
                 new ConnectionLogWriterFactory(properties), new ObjectMapper(), inspectionExecutor);
         ClientChannelInitializer clientInitializer = new ClientChannelInitializer(
                 brokerConnectionFactory, connectionRegistry, backpressureController,

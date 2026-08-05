@@ -2,7 +2,7 @@ package at.roboalex2.kafkaproxy.protocol.inspect;
 
 import at.roboalex2.kafkaproxy.logging.ConnectionLogWriter;
 import at.roboalex2.kafkaproxy.protocol.codec.ParsedProtocolMessage;
-import at.roboalex2.kafkaproxy.protocol.codec.ProtocolCodecRegistry;
+import at.roboalex2.kafkaproxy.protocol.codec.ProtocolParser;
 import at.roboalex2.kafkaproxy.protocol.correlation.ConnectionRequestRegistry;
 import at.roboalex2.kafkaproxy.protocol.correlation.RequestContext;
 import io.netty.buffer.ByteBuf;
@@ -19,22 +19,22 @@ import tools.jackson.databind.ObjectMapper;
 public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaResponseInspector, AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionProtocolContext.class);
     private final String connectionId;
-    private final ProtocolCodecRegistry codecs;
+    private final ProtocolParser protocolParser;
     private final ConnectionRequestRegistry requests = new ConnectionRequestRegistry();
     private final ConnectionLogWriter logWriter;
     private final ObjectMapper objectMapper;
-    private final OrderedConnectionExecutor executor;
+    private final OrderedTaskExecutor executor;
     private final AtomicLong messageCounter = new AtomicLong();
     private volatile boolean closing;
 
-    public ConnectionProtocolContext(String connectionId, ProtocolCodecRegistry codecs,
+    public ConnectionProtocolContext(String connectionId, ProtocolParser protocolParser,
                                      ConnectionLogWriter logWriter, ObjectMapper objectMapper,
-                                     ProtocolInspectionExecutor inspectionExecutor) {
+                                     VirtualThreadExecutor inspectionExecutor) {
         this.connectionId = connectionId;
-        this.codecs = codecs;
+        this.protocolParser = protocolParser;
         this.logWriter = logWriter;
         this.objectMapper = objectMapper;
-        this.executor = new OrderedConnectionExecutor(inspectionExecutor);
+        this.executor = new OrderedTaskExecutor(inspectionExecutor);
     }
 
     public synchronized void inspect(TrafficDirection direction, ByteBuf completeFrame) {
@@ -69,14 +69,14 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
     @Override
     public void inspectRequest(long messageNumber, ByteBuffer frameBody) {
         int frameSize = frameBody.remaining();
-        ParsedProtocolMessage parsed = codecs.parseRequest(frameBody);
+        ParsedProtocolMessage parsed = protocolParser.parseRequest(frameBody);
         if ("Unknown".equals(parsed.getApiName())) {
             logUnknown(messageNumber, TrafficDirection.CLIENT_TO_BROKER, frameSize, parsed.getCorrelationId());
             return;
         }
         RequestContext request = new RequestContext(connectionId, parsed.getCorrelationId(), parsed.getApiKey(),
                 parsed.getApiName(), parsed.getApiVersion(), parsed.getHeaderVersion(),
-                codecs.responseHeaderVersion(parsed.getApiKey(), parsed.getApiVersion()),
+                protocolParser.responseHeaderVersion(parsed.getApiKey(), parsed.getApiVersion()),
                 parsed.isExpectsResponse(), messageNumber, Instant.now());
         if (request.isExpectsResponse() && !registerIfOpen(request)) {
             logWriter.append(messageNumber + " C -> B: Duplicate correlationId "
@@ -98,7 +98,7 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
             logUnknown(messageNumber, TrafficDirection.BROKER_TO_CLIENT, frameSize, correlationId);
             return;
         }
-        logParsed(messageNumber, TrafficDirection.BROKER_TO_CLIENT, codecs.parseResponse(frameBody, request));
+        logParsed(messageNumber, TrafficDirection.BROKER_TO_CLIENT, protocolParser.parseResponse(frameBody, request));
     }
 
     private void logParsed(long number, TrafficDirection direction, ParsedProtocolMessage parsed) {
