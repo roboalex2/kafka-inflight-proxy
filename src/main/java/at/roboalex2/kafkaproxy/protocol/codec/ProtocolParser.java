@@ -42,9 +42,10 @@ public class ProtocolParser {
         RequestHeader header = RequestHeader.parse(body);
         boolean detailed = supportsDetailedBody(api, version);
         ProtocolMessageModel model = null;
+        ApiMessage data = null;
         boolean expectsResponse = true;
         if (detailed) {
-            ApiMessage data = api.messageType.newRequest();
+            data = api.messageType.newRequest();
             data.read(new ByteBufferAccessor(body), version);
             model = modelMapper.mapRequest(rawApiKey, version, data);
             if (data instanceof ProduceRequestData produceRequest) {
@@ -52,7 +53,7 @@ public class ProtocolParser {
             }
         }
         return new ParsedProtocolMessage(header.correlationId(), rawApiKey, api.name, version,
-                header.headerVersion(), detailed, expectsResponse, model);
+                header.headerVersion(), detailed, expectsResponse, model, header.data(), data);
     }
 
     public ParsedProtocolMessage parseResponse(ByteBuffer body, RequestContext request) {
@@ -60,13 +61,14 @@ public class ProtocolParser {
         ApiKeys api = ApiKeys.forId(request.getApiKey());
         boolean detailed = supportsDetailedBody(api, request.getApiVersion());
         ProtocolMessageModel model = null;
+        ApiMessage data = null;
         if (detailed) {
-            ApiMessage data = api.messageType.newResponse();
+            data = api.messageType.newResponse();
             data.read(new ByteBufferAccessor(body), request.getApiVersion());
             model = modelMapper.mapResponse(request.getApiKey(), request.getApiVersion(), data);
         }
         return new ParsedProtocolMessage(header.correlationId(), request.getApiKey(), request.getApiName(),
-                request.getApiVersion(), header.headerVersion(), detailed, true, model);
+                request.getApiVersion(), header.headerVersion(), detailed, true, model, header.data(), data);
     }
 
     public short responseHeaderVersion(short apiKey, short version) {

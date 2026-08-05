@@ -5,11 +5,20 @@ import at.roboalex2.kafkaproxy.protocol.codec.ParsedProtocolMessage;
 import at.roboalex2.kafkaproxy.protocol.codec.ProtocolParser;
 import at.roboalex2.kafkaproxy.protocol.correlation.ConnectionRequestRegistry;
 import at.roboalex2.kafkaproxy.protocol.correlation.RequestContext;
+import at.roboalex2.kafkaproxy.protocol.mapping.ProtocolModelMapper;
+import at.roboalex2.kafkaproxy.protocol.serialization.ProtocolMessageSerializer;
+import at.roboalex2.kafkaproxy.protocol.transform.MessageTransformer;
+import at.roboalex2.kafkaproxy.protocol.transform.MissingBrokerMappingException;
+import at.roboalex2.kafkaproxy.protocol.transform.MetadataTransformationException;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.util.ReferenceCountUtil;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -24,17 +33,101 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
     private final ConnectionLogWriter logWriter;
     private final ObjectMapper objectMapper;
     private final OrderedTaskExecutor executor;
+    private final MessageTransformer transformer;
+    private final ProtocolMessageSerializer serializer;
+    private final ProtocolModelMapper modelMapper;
     private final AtomicLong messageCounter = new AtomicLong();
     private volatile boolean closing;
 
     public ConnectionProtocolContext(String connectionId, ProtocolParser protocolParser,
                                      ConnectionLogWriter logWriter, ObjectMapper objectMapper,
-                                     VirtualThreadExecutor inspectionExecutor) {
+                                     VirtualThreadExecutor inspectionExecutor, MessageTransformer transformer,
+                                     ProtocolMessageSerializer serializer, ProtocolModelMapper modelMapper) {
         this.connectionId = connectionId;
         this.protocolParser = protocolParser;
         this.logWriter = logWriter;
         this.objectMapper = objectMapper;
         this.executor = new OrderedTaskExecutor(inspectionExecutor);
+        this.transformer = transformer;
+        this.serializer = serializer;
+        this.modelMapper = modelMapper;
+    }
+
+    /** Takes ownership of a broker frame and completes with the frame that may be forwarded. */
+    public synchronized void processBrokerFrame(ByteBuf completeFrame, Consumer<ByteBuf> onReady,
+                                                Runnable onFatalTransformationFailure) {
+        if (closing) {
+            ReferenceCountUtil.release(completeFrame);
+            return;
+        }
+        long number = messageCounter.incrementAndGet();
+        executor.execute(() -> processBrokerFrame(number, completeFrame, onReady, onFatalTransformationFailure));
+    }
+
+    private void processBrokerFrame(long number, ByteBuf frame, Consumer<ByteBuf> onReady,
+                                    Runnable onFatalTransformationFailure) {
+        if (frame.readableBytes() < Integer.BYTES) {
+            logUnknown(number, TrafficDirection.BROKER_TO_CLIENT, frame.readableBytes(), null);
+            onReady.accept(frame);
+            return;
+        }
+        ByteBuffer body = frame.nioBuffer(frame.readerIndex() + Integer.BYTES,
+                frame.readableBytes() - Integer.BYTES);
+        try {
+            ByteBuf outbound = inspectAndTransformResponse(number, body, frame);
+            if (outbound != null) {
+                onReady.accept(outbound);
+            }
+        } catch (MissingBrokerMappingException | MetadataTransformationException exception) {
+            logTransformationFailure(number, exception.getMessage());
+            ReferenceCountUtil.release(frame);
+            onFatalTransformationFailure.run();
+        } catch (RuntimeException exception) {
+            LOGGER.debug("Could not inspect Kafka response on connection {}", connectionId, exception);
+            logUnknown(number, TrafficDirection.BROKER_TO_CLIENT,
+                    Math.max(0, frame.readableBytes() - Integer.BYTES),
+                    correlationId(frame, TrafficDirection.BROKER_TO_CLIENT));
+            onReady.accept(frame);
+        }
+    }
+
+    private ByteBuf inspectAndTransformResponse(long number, ByteBuffer body, ByteBuf originalFrame) {
+        int frameSize = body.remaining();
+        if (body.remaining() < Integer.BYTES) {
+            logUnknown(number, TrafficDirection.BROKER_TO_CLIENT, frameSize, null);
+            return originalFrame;
+        }
+        int correlationId = body.getInt(body.position());
+        RequestContext request = requests.remove(correlationId);
+        if (request == null) {
+            logUnknown(number, TrafficDirection.BROKER_TO_CLIENT, frameSize, correlationId);
+            return originalFrame;
+        }
+
+        ParsedProtocolMessage parsed = protocolParser.parseResponse(body, request);
+        logParsed(number, TrafficDirection.BROKER_TO_CLIENT, parsed, "ORIGINAL");
+        if (parsed.getApiKey() != ApiKeys.METADATA.id || !parsed.isSupportedBody()) {
+            return originalFrame;
+        }
+
+        try {
+            ApiMessage transformed = transformer.transform(parsed.getApiKey(), parsed.getApiVersion(),
+                    parsed.getMessageData());
+            ParsedProtocolMessage modified = new ParsedProtocolMessage(parsed.getCorrelationId(), parsed.getApiKey(),
+                    parsed.getApiName(), parsed.getApiVersion(), parsed.getHeaderVersion(), true, true,
+                    modelMapper.mapResponse(parsed.getApiKey(), parsed.getApiVersion(), transformed),
+                    parsed.getHeaderData(), transformed);
+            ByteBuffer serialized = serializer.serializeResponse(parsed.getHeaderData(), parsed.getHeaderVersion(),
+                    transformed, parsed.getApiVersion());
+            logParsed(number, TrafficDirection.BROKER_TO_CLIENT, modified, "FORWARDED_MODIFIED");
+            ByteBuf outbound = Unpooled.wrappedBuffer(serialized);
+            ReferenceCountUtil.release(originalFrame);
+            return outbound;
+        } catch (MissingBrokerMappingException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new MetadataTransformationException("Metadata response could not be transformed safely", exception);
+        }
     }
 
     public synchronized void inspect(TrafficDirection direction, ByteBuf completeFrame) {
@@ -54,6 +147,7 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
                 if (direction == TrafficDirection.CLIENT_TO_BROKER) {
                     inspectRequest(number, body);
                 } else {
+                    // TODO: This can be removed since processBrokerFrame handels responses now.
                     inspectResponse(number, body);
                 }
             } catch (RuntimeException exception) {
@@ -82,9 +176,10 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
             logWriter.append(messageNumber + " C -> B: Duplicate correlationId "
                     + request.getCorrelationId() + " for " + request.getApiName() + "Request");
         }
-        logParsed(messageNumber, TrafficDirection.CLIENT_TO_BROKER, parsed);
+        logParsed(messageNumber, TrafficDirection.CLIENT_TO_BROKER, parsed, "ORIGINAL");
     }
 
+    // TODO: This can be removed since processBrokerFrame handels responses now.
     @Override
     public void inspectResponse(long messageNumber, ByteBuffer frameBody) {
         int frameSize = frameBody.remaining();
@@ -98,10 +193,11 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
             logUnknown(messageNumber, TrafficDirection.BROKER_TO_CLIENT, frameSize, correlationId);
             return;
         }
-        logParsed(messageNumber, TrafficDirection.BROKER_TO_CLIENT, protocolParser.parseResponse(frameBody, request));
+        logParsed(messageNumber, TrafficDirection.BROKER_TO_CLIENT,
+                protocolParser.parseResponse(frameBody, request), "ORIGINAL");
     }
 
-    private void logParsed(long number, TrafficDirection direction, ParsedProtocolMessage parsed) {
+    private void logParsed(long number, TrafficDirection direction, ParsedProtocolMessage parsed, String label) {
         if (!logWriter.isEnabled()) {
             return;
         }
@@ -113,10 +209,17 @@ public class ConnectionProtocolContext implements KafkaRequestInspector, KafkaRe
         }
         try {
             String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsed.getModel());
-            logWriter.append(heading + " ORIGINAL" + System.lineSeparator() + json);
+            logWriter.append(heading + " " + label + System.lineSeparator() + json);
         } catch (JacksonException exception) {
             LOGGER.warn("Could not serialize protocol model on connection {}", connectionId, exception);
             logWriter.append(heading + " (JSON serialization failed)");
+        }
+    }
+
+    private void logTransformationFailure(long number, String message) {
+        LOGGER.error("Closing Kafka connection {}: {}", connectionId, message);
+        if (logWriter.isEnabled()) {
+            logWriter.append(number + " B -> C: MetadataResponse transformation failed: " + message);
         }
     }
 

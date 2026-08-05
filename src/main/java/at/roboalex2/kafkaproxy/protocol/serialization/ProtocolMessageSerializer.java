@@ -1,3 +1,9 @@
 package at.roboalex2.kafkaproxy.protocol.serialization;
-/** Serializes transformed protocol models back to valid Kafka wire representations. */
-public interface ProtocolMessageSerializer { }
+
+import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.ApiMessage;
+
+public interface ProtocolMessageSerializer {
+    ByteBuffer serializeResponse(ApiMessage headerData, short headerVersion,
+                                 ApiMessage responseData, short apiVersion);
+}

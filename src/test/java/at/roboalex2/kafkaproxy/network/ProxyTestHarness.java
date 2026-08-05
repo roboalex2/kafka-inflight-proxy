@@ -7,8 +7,12 @@ import at.roboalex2.kafkaproxy.protocol.codec.ProtocolParser;
 import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContextFactory;
 import at.roboalex2.kafkaproxy.protocol.inspect.VirtualThreadExecutor;
 import at.roboalex2.kafkaproxy.protocol.mapping.ProtocolModelMapper;
+import at.roboalex2.kafkaproxy.protocol.serialization.KafkaProtocolMessageSerializer;
+import at.roboalex2.kafkaproxy.protocol.transform.MetadataEndpointTransformer;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 final class ProxyTestHarness implements AutoCloseable {
     private final int listenPort;
@@ -21,10 +25,17 @@ final class ProxyTestHarness implements AutoCloseable {
     }
 
     ProxyTestHarness(int listenPort, int brokerPort, Path logDirectory) {
+        this(listenPort, brokerPort, logDirectory, Map.of(
+                new Endpoint("127.0.0.1", brokerPort), new Endpoint("127.0.0.1", listenPort)));
+    }
+
+    ProxyTestHarness(int listenPort, int brokerPort, Path logDirectory,
+                     Map<Endpoint, Endpoint> brokerMappings) {
         this.listenPort = listenPort;
         KafkaProxyProperties properties = new KafkaProxyProperties();
         properties.setListenAddress(new Endpoint("127.0.0.1", listenPort));
         properties.setUpstreamBrokerAddress(new Endpoint("127.0.0.1", brokerPort));
+        properties.setBrokerProxyAddresses(new LinkedHashMap<>(brokerMappings));
         if (logDirectory != null) {
             properties.getRequestLogging().setEnabled(true);
             properties.getRequestLogging().setBaseDirectory(logDirectory);
@@ -36,9 +47,11 @@ final class ProxyTestHarness implements AutoCloseable {
         BrokerConnectionFactory brokerConnectionFactory =
                 new NettyBrokerConnectionFactory(properties, brokerInitializer);
         inspectionExecutor = new VirtualThreadExecutor();
+        ProtocolModelMapper modelMapper = new ProtocolModelMapper();
         ConnectionProtocolContextFactory protocolContextFactory = new ConnectionProtocolContextFactory(
-                new ProtocolParser(new ProtocolModelMapper()),
-                new ConnectionLogWriterFactory(properties), new ObjectMapper(), inspectionExecutor);
+                new ProtocolParser(modelMapper), new ConnectionLogWriterFactory(properties),
+                new ObjectMapper(), inspectionExecutor, new MetadataEndpointTransformer(properties),
+                new KafkaProtocolMessageSerializer(), modelMapper);
         ClientChannelInitializer clientInitializer = new ClientChannelInitializer(
                 brokerConnectionFactory, connectionRegistry, backpressureController,
                 protocolContextFactory, properties);

@@ -1,3 +1,7 @@
 package at.roboalex2.kafkaproxy.protocol.transform;
-/** Applies an explicit supported transformation; pass-through remains the default. */
-public interface MessageTransformer { }
+
+import org.apache.kafka.common.protocol.ApiMessage;
+
+public interface MessageTransformer {
+    ApiMessage transform(short apiKey, short apiVersion, ApiMessage message);
+}

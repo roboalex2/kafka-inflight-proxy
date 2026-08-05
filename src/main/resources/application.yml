@@ -6,16 +6,16 @@ spring:
 
 kafka-proxy:
   listen-address: "0.0.0.0:19092"
-  upstream-broker-address: "kafka-1:9092"
+  upstream-broker-address: "localhost:9092"
   server:
     enabled: true
     connect-timeout-millis: 10000
   broker-proxy-addresses:
-    "[kafka-1:9092]": "proxy-1:19092"
-    "[kafka-2:9092]": "proxy-2:19092"
-    "[kafka-3:9092]": "proxy-3:19092"
+    "[localhost:9092]": "localhost:19092"
+    "[kafka-2:9092]": "localhost:19093"
+    "[kafka-3:9092]": "localhost:19094"
   protocol:
     max-frame-size-bytes: 104857600
   request-logging:
-    enabled: false
+    enabled: true
     base-directory: "./logs/kafka-proxy"

@@ -67,11 +67,13 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
             connectionPair.activateCloseCoupling();
 
             clientChannel.pipeline().addLast("protocolInspection",
-                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.CLIENT_TO_BROKER));
+                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.CLIENT_TO_BROKER,
+                            connectionPair));
             clientChannel.pipeline().addLast("clientToBroker",
                     new ClientToBrokerHandler(connectionPair, backpressureController));
             brokerConnectFuture.channel().pipeline().addLast("protocolInspection",
-                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.BROKER_TO_CLIENT));
+                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.BROKER_TO_CLIENT,
+                            connectionPair));
             brokerConnectFuture.channel().pipeline().addLast("brokerToClient",
                     new BrokerToClientHandler(connectionPair, backpressureController));
 
