@@ -2,6 +2,10 @@ package at.roboalex2.kafkaproxy.network;
 
 import at.roboalex2.kafkaproxy.config.KafkaProxyProperties;
 import at.roboalex2.kafkaproxy.protocol.frame.KafkaFrameDecoder;
+import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContext;
+import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContextFactory;
+import at.roboalex2.kafkaproxy.protocol.inspect.ProtocolInspectionHandler;
+import at.roboalex2.kafkaproxy.protocol.inspect.TrafficDirection;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
@@ -12,15 +16,18 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
     private final BrokerConnectionFactory brokerConnectionFactory;
     private final ConnectionRegistry connectionRegistry;
     private final ChannelBackpressureController backpressureController;
+    private final ConnectionProtocolContextFactory protocolContextFactory;
     private final int maxFrameSizeBytes;
 
     public ClientChannelInitializer(BrokerConnectionFactory brokerConnectionFactory,
                                     ConnectionRegistry connectionRegistry,
                                     ChannelBackpressureController backpressureController,
+                                    ConnectionProtocolContextFactory protocolContextFactory,
                                     KafkaProxyProperties properties) {
         this.brokerConnectionFactory = brokerConnectionFactory;
         this.connectionRegistry = connectionRegistry;
         this.backpressureController = backpressureController;
+        this.protocolContextFactory = protocolContextFactory;
         this.maxFrameSizeBytes = properties.getProtocol().getMaxFrameSizeBytes();
     }
 
@@ -49,8 +56,9 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
                 return;
             }
 
+            ConnectionProtocolContext protocolContext = protocolContextFactory.create(clientChannel);
             DefaultConnectionPair connectionPair = new DefaultConnectionPair(
-                    clientChannel, brokerConnectFuture.channel(), connectionRegistry);
+                    clientChannel, brokerConnectFuture.channel(), connectionRegistry, protocolContext);
             connectionRegistry.unregisterPending(clientChannel);
             if (!connectionRegistry.register(connectionPair)) {
                 connectionPair.close();
@@ -58,8 +66,12 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
             }
             connectionPair.activateCloseCoupling();
 
+            clientChannel.pipeline().addLast("protocolInspection",
+                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.CLIENT_TO_BROKER));
             clientChannel.pipeline().addLast("clientToBroker",
                     new ClientToBrokerHandler(connectionPair, backpressureController));
+            brokerConnectFuture.channel().pipeline().addLast("protocolInspection",
+                    new ProtocolInspectionHandler(protocolContext, TrafficDirection.BROKER_TO_CLIENT));
             brokerConnectFuture.channel().pipeline().addLast("brokerToClient",
                     new BrokerToClientHandler(connectionPair, backpressureController));
 

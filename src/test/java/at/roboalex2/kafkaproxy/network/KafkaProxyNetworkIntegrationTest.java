@@ -12,10 +12,41 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class KafkaProxyNetworkIntegrationTest {
     private static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(3);
+    @TempDir Path temporaryDirectory;
+
+    @Test
+    void logsBothDirectionsWithOneMonotonicConnectionCounterWithoutChangingFrames() throws Exception {
+        try (FakeKafkaBroker broker = new FakeKafkaBroker()) {
+            ProxyTestHarness proxy = new ProxyTestHarness(freePort(), broker.getPort(), temporaryDirectory);
+            try (Socket client = connect(proxy)) {
+                Socket brokerConnection = broker.awaitConnection(CONNECTION_TIMEOUT);
+                byte[] request = frame("unknown-request");
+                byte[] response = frame("unknown-response");
+                client.getOutputStream().write(request);
+                client.getOutputStream().flush();
+                assertThat(readFrame(brokerConnection.getInputStream())).isEqualTo(request);
+                brokerConnection.getOutputStream().write(response);
+                brokerConnection.getOutputStream().flush();
+                assertThat(readFrame(client.getInputStream())).isEqualTo(response);
+            } finally {
+                proxy.close();
+            }
+
+            Path connectionDirectory = Files.list(temporaryDirectory).findFirst().orElseThrow();
+            assertThat(Files.list(temporaryDirectory).toList()).containsExactly(connectionDirectory);
+            assertThat(Files.list(connectionDirectory).toList())
+                    .containsExactly(connectionDirectory.resolve("connection.log"));
+            String log = Files.readString(connectionDirectory.resolve("connection.log"));
+            assertThat(log).contains("1 C -> B:", "2 B -> C:", "Unknown Kafka frame");
+        }
+    }
 
     @Test
     void relaysFramesByteForByteInBothDirectionsWithoutRequestResponseLockstep() throws Exception {

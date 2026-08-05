@@ -1,3 +1,8 @@
 package at.roboalex2.kafkaproxy.protocol.correlation;
-/** Owns correlation-ID state with one isolated lifecycle per connection pair. */
-public interface RequestCorrelationTracker { }
+
+public interface RequestCorrelationTracker {
+    boolean register(RequestContext requestContext);
+    RequestContext remove(int correlationId);
+    int size();
+    void clear();
+}

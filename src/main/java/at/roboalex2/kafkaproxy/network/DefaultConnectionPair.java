@@ -1,19 +1,28 @@
 package at.roboalex2.kafkaproxy.network;
 
 import io.netty.channel.Channel;
+import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContext;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultConnectionPair implements ConnectionPair {
     private final Channel clientChannel;
     private final Channel brokerChannel;
     private final ConnectionRegistry connectionRegistry;
+    private final ConnectionProtocolContext protocolContext;
     private final AtomicBoolean closed = new AtomicBoolean();
 
     public DefaultConnectionPair(Channel clientChannel, Channel brokerChannel,
                                  ConnectionRegistry connectionRegistry) {
+        this(clientChannel, brokerChannel, connectionRegistry, null);
+    }
+
+    public DefaultConnectionPair(Channel clientChannel, Channel brokerChannel,
+                                 ConnectionRegistry connectionRegistry,
+                                 ConnectionProtocolContext protocolContext) {
         this.clientChannel = clientChannel;
         this.brokerChannel = brokerChannel;
         this.connectionRegistry = connectionRegistry;
+        this.protocolContext = protocolContext;
     }
 
     public void activateCloseCoupling() {
@@ -47,6 +56,9 @@ public class DefaultConnectionPair implements ConnectionPair {
             return;
         }
         connectionRegistry.unregister(this);
+        if (protocolContext != null) {
+            protocolContext.close();
+        }
         closeIfNeeded(clientChannel);
         closeIfNeeded(brokerChannel);
     }

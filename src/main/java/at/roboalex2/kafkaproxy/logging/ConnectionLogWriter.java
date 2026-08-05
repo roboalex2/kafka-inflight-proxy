@@ -1,3 +1,7 @@
 package at.roboalex2.kafkaproxy.logging;
-/** Preserves per-connection log ordering without blocking a Netty event-loop thread. */
-public interface ConnectionLogWriter { }
+
+public interface ConnectionLogWriter extends AutoCloseable {
+    boolean isEnabled();
+    void append(String entry);
+    @Override void close();
+}
