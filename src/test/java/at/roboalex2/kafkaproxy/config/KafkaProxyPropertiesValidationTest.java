@@ -26,6 +26,8 @@ class KafkaProxyPropertiesValidationTest {
             assertThat(properties.getRequestLogging().isEnabled()).isTrue();
             assertThat(properties.getRequestLogging().getBaseDirectory())
                     .isEqualTo(Path.of("build/protocol-logs"));
+            assertThat(properties.getServer().isEnabled()).isFalse();
+            assertThat(properties.getServer().getConnectTimeoutMillis()).isEqualTo(10_000);
         });
     }
 
@@ -90,6 +92,7 @@ class KafkaProxyPropertiesValidationTest {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("spring.main.web-application-type", "none");
         properties.put("spring.config.name", "kafka-proxy-validation-test");
+        properties.put("kafka-proxy.server.enabled", "false");
         properties.put("kafka-proxy.listen-address", "0.0.0.0:19092");
         properties.put("kafka-proxy.upstream-broker-address", "kafka-1:9092");
         properties.put(BROKER_MAPPING_PROPERTY, "proxy-1:19092");

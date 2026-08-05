@@ -1,3 +1,7 @@
 package at.roboalex2.kafkaproxy.network;
-/** Owns the future Netty server lifecycle. No implementation is registered in Step 1. */
-public interface KafkaProxyServer { }
+
+import org.springframework.context.SmartLifecycle;
+
+/** Owns the Netty listener and all connections accepted through it. */
+public interface KafkaProxyServer extends SmartLifecycle {
+}

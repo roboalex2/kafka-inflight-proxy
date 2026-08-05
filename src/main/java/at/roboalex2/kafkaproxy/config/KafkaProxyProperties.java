@@ -21,6 +21,8 @@ public class KafkaProxyProperties {
     private ProtocolProperties protocol = new ProtocolProperties();
     @Valid @NotNull
     private RequestLoggingProperties requestLogging = new RequestLoggingProperties();
+    @Valid @NotNull
+    private ServerProperties server = new ServerProperties();
 
     public Endpoint getListenAddress() {
         return listenAddress;
@@ -60,5 +62,13 @@ public class KafkaProxyProperties {
 
     public void setRequestLogging(RequestLoggingProperties requestLogging) {
         this.requestLogging = requestLogging;
+    }
+
+    public ServerProperties getServer() {
+        return server;
+    }
+
+    public void setServer(ServerProperties server) {
+        this.server = server;
     }
 }

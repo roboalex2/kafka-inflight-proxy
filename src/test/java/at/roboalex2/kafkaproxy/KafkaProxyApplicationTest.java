@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "kafka-proxy.server.enabled=false")
 class KafkaProxyApplicationTest {
     @Autowired private ApplicationContext applicationContext;
     @Autowired private KafkaProxyProperties properties;
