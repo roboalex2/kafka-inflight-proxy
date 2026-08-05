@@ -23,6 +23,10 @@ public class KafkaProxyProperties {
     private RequestLoggingProperties requestLogging = new RequestLoggingProperties();
     @Valid @NotNull
     private ServerProperties server = new ServerProperties();
+    @Valid @NotNull
+    private RedisProperties redis = new RedisProperties();
+    @Valid @NotNull
+    private CryptoProperties crypto = new CryptoProperties();
 
     public Endpoint getListenAddress() {
         return listenAddress;
@@ -71,4 +75,9 @@ public class KafkaProxyProperties {
     public void setServer(ServerProperties server) {
         this.server = server;
     }
+
+    public RedisProperties getRedis() { return redis; }
+    public void setRedis(RedisProperties redis) { this.redis = redis; }
+    public CryptoProperties getCrypto() { return crypto; }
+    public void setCrypto(CryptoProperties crypto) { this.crypto = crypto; }
 }

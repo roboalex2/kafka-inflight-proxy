@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Kafka Proxy Cryptographic Key Management API
+  version: 1.0.0
+  description: Proof-of-concept API for Redis-backed Kafka record encryption keys and assignments.
+servers:
+  - url: /
+tags:
+  - name: CryptoKeyManagement
+paths:
+  /api/v1/crypto/assignments:
+    get:
+      tags: [CryptoKeyManagement]
+      operationId: listAssignments
+      responses:
+        '200':
+          description: Assignments grouped by topic and unassigned stored key identifiers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentListResponse'
+        default:
+          $ref: '#/components/responses/BackendError'
+  /api/v1/crypto/assignments/{topicId}/{recordKeyHash}:
+    put:
+      tags: [CryptoKeyManagement]
+      operationId: putAssignment
+      parameters:
+        - name: topicId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: recordKeyHash
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Fa-f0-9]{64}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentRequest'
+      responses:
+        '200':
+          description: Assignment result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+        default:
+          $ref: '#/components/responses/BackendError'
+  /api/v1/crypto/keys/{keyId}:
+    delete:
+      tags: [CryptoKeyManagement]
+      operationId: deleteKey
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deleted key and removed assignments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteKeyResponse'
+        default:
+          $ref: '#/components/responses/BackendError'
+components:
+  responses:
+    BackendError:
+      description: Backend error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BackendErrorResponse'
+  schemas:
+    AssignmentMode:
+      type: string
+      enum: [ASSIGN_EXISTING, GENERATE_NEW]
+    AssignmentRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          $ref: '#/components/schemas/AssignmentMode'
+        keyId:
+          type: string
+          format: uuid
+          nullable: true
+    AssignmentResponse:
+      type: object
+      required: [topicId, recordKeyHash, keyId, generated]
+      properties:
+        topicId: { type: string, format: uuid }
+        recordKeyHash: { type: string }
+        keyId: { type: string, format: uuid }
+        generated: { type: boolean }
+        replacedKeyId:
+          type: string
+          format: uuid
+          nullable: true
+    AssignmentListResponse:
+      type: object
+      required: [topics, unassignedKeyIds]
+      properties:
+        topics:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+              format: uuid
+        unassignedKeyIds:
+          type: array
+          items: { type: string, format: uuid }
+    RemovedAssignment:
+      type: object
+      required: [topicId, recordKeyHash]
+      properties:
+        topicId: { type: string, format: uuid }
+        recordKeyHash: { type: string }
+    DeleteKeyResponse:
+      type: object
+      required: [keyId, deleted, removedAssignments]
+      properties:
+        keyId: { type: string, format: uuid }
+        deleted: { type: boolean }
+        removedAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RemovedAssignment'
+    BackendErrorResponse:
+      type: object
+      required: [code, message, cause]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        cause: { type: string }

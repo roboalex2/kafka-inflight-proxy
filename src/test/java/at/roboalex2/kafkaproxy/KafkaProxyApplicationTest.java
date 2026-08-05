@@ -9,7 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = "kafka-proxy.server.enabled=false")
+        properties = {"kafka-proxy.server.enabled=false", "kafka-proxy.crypto.key-encryption-key=test-only-kek"})
 class KafkaProxyApplicationTest {
     @Autowired private ApplicationContext applicationContext;
     @Autowired private KafkaProxyProperties properties;
