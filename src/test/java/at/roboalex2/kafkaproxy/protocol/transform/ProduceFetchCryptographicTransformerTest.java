@@ -231,6 +231,35 @@ class ProduceFetchCryptographicTransformerTest {
     }
 
     @Test
+    void plaintextRecordIsPreservedWhenAnotherRecordInTheFetchBatchIsDecrypted() {
+        CryptoTransformTestFixture fixture = new CryptoTransformTestFixture();
+        MemoryRecords encryptedRecords = recordsOf((ProduceRequestData) fixture.produceTransformer.transform(
+                produce(TOPIC_ID, TOPIC, records(CompressionType.NONE,
+                        new SimpleRecord(1_000L, "encrypted-key".getBytes(StandardCharsets.UTF_8),
+                                "encrypted-value".getBytes(StandardCharsets.UTF_8))))).message());
+        Record encrypted = recordList(encryptedRecords).getFirst();
+        byte[] plaintextKey = "plain-key".getBytes(StandardCharsets.UTF_8);
+        byte[] plaintextValue = "plain-value".getBytes(StandardCharsets.UTF_8);
+        Header[] plaintextHeaders = {new RecordHeader("plain-header",
+                "plain-header-value".getBytes(StandardCharsets.UTF_8))};
+        MemoryRecords mixed = records(CompressionType.NONE,
+                new SimpleRecord(encrypted.timestamp(), copy(encrypted.key()), copy(encrypted.value()),
+                        encrypted.headers()),
+                new SimpleRecord(1_001L, plaintextKey, plaintextValue, plaintextHeaders));
+
+        MessageTransformationResult result = fixture.fetchTransformer.transform(
+                "connection-test", fetch(TOPIC_ID, TOPIC, mixed));
+        List<Record> returned = recordList(recordsOf((FetchResponseData) result.message()));
+
+        assertThat(copy(returned.getFirst().key())).isEqualTo("encrypted-key".getBytes(StandardCharsets.UTF_8));
+        assertThat(copy(returned.getFirst().value())).isEqualTo("encrypted-value".getBytes(StandardCharsets.UTF_8));
+        assertThat(copy(returned.get(1).key())).isEqualTo(plaintextKey);
+        assertThat(copy(returned.get(1).value())).isEqualTo(plaintextValue);
+        assertThat(returned.get(1).headers()).extracting(Header::key).containsExactly("plain-header");
+        assertThat(returned.get(1).headers()[0].value()).isEqualTo(plaintextHeaders[0].value());
+    }
+
+    @Test
     void reservedProducerHeadersAreOverwrittenAndMissingTopicIdsFailClosed() {
         CryptoTransformTestFixture fixture = new CryptoTransformTestFixture();
         ProduceRequestData conflict = produce(TOPIC_ID, TOPIC, records(CompressionType.NONE,

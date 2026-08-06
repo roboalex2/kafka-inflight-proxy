@@ -81,8 +81,13 @@ public class RecordBatchTransformer {
             for (OriginalAndTransformedRecord item : records) {
                 Record original = item.original();
                 RecordComponents transformed = item.transformed();
-                builder.appendWithOffset(original.offset(), original.timestamp(), buffer(transformed.key()),
-                        buffer(transformed.value()), copyHeaders(transformed.headers()));
+                if (transformed.changed()) {
+                    builder.appendWithOffset(original.offset(), original.timestamp(), buffer(transformed.key()),
+                            buffer(transformed.value()), copyHeaders(transformed.headers()));
+                } else {
+                    builder.appendWithOffset(original.offset(), original.timestamp(), duplicate(original.key()),
+                            duplicate(original.value()), copyHeaders(original.headers()));
+                }
             }
             MemoryRecords rebuilt = builder.build();
             ByteBuffer bytes = rebuilt.buffer().duplicate();
@@ -99,6 +104,7 @@ public class RecordBatchTransformer {
     }
 
     private ByteBuffer buffer(byte[] value) { return value == null ? null : ByteBuffer.wrap(value); }
+    private ByteBuffer duplicate(ByteBuffer value) { return value == null ? null : value.duplicate(); }
     private Header[] copyHeaders(Header[] headers) { return headers == null ? Record.EMPTY_HEADERS : headers.clone(); }
     private BackendServiceException unsupported(String message) {
         return new BackendServiceException(BackendErrorCode.PROTOCOL_TRANSFORMATION_FAILED, message);
