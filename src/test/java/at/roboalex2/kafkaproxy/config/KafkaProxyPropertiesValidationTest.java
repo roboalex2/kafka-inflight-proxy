@@ -23,6 +23,9 @@ class KafkaProxyPropertiesValidationTest {
             assertThat(properties.getBrokerProxyAddresses()).containsEntry(
                     new Endpoint("kafka-1", 9092), new Endpoint("proxy-1", 19092));
             assertThat(properties.getProtocol().getMaxFrameSizeBytes()).isEqualTo(104_857_600);
+            assertThat(properties.getProtocol().getTransformationWorkerThreads()).isEqualTo(4);
+            assertThat(properties.getProtocol().getTransformationExecutorQueueCapacity()).isEqualTo(32);
+            assertThat(properties.getProtocol().getPerConnectionTransformationQueueCapacity()).isEqualTo(8);
             assertThat(properties.getRequestLogging().isEnabled()).isTrue();
             assertThat(properties.getRequestLogging().getBaseDirectory())
                     .isEqualTo(Path.of("build/protocol-logs"));
@@ -83,6 +86,19 @@ class KafkaProxyPropertiesValidationTest {
     }
 
     @Test
+    void rejectsNonPositiveTransformationBoundsAtStartup() {
+        contextRunner(Map.of("kafka-proxy.protocol.transformation-worker-threads", "0")).run(context ->
+                assertThat(context).hasFailed().getFailure().rootCause()
+                        .hasMessageContaining("transformationWorkerThreads"));
+        contextRunner(Map.of("kafka-proxy.protocol.transformation-executor-queue-capacity", "0")).run(context ->
+                assertThat(context).hasFailed().getFailure().rootCause()
+                        .hasMessageContaining("transformationExecutorQueueCapacity"));
+        contextRunner(Map.of("kafka-proxy.protocol.per-connection-transformation-queue-capacity", "0"))
+                .run(context -> assertThat(context).hasFailed().getFailure().rootCause()
+                        .hasMessageContaining("perConnectionTransformationQueueCapacity"));
+    }
+
+    @Test
     void rejectsInvalidRedisAndCryptoConfigurationAtStartup() {
         contextRunner(Map.of("kafka-proxy.redis.host", " ")).run(context ->
                 assertThat(context).hasFailed().getFailure().rootCause().hasMessageContaining("redis.host"));
@@ -126,6 +142,9 @@ class KafkaProxyPropertiesValidationTest {
         properties.put("kafka-proxy.upstream-broker-address", "kafka-1:9092");
         properties.put(BROKER_MAPPING_PROPERTY, "proxy-1:19092");
         properties.put("kafka-proxy.protocol.max-frame-size-bytes", "104857600");
+        properties.put("kafka-proxy.protocol.transformation-worker-threads", "4");
+        properties.put("kafka-proxy.protocol.transformation-executor-queue-capacity", "32");
+        properties.put("kafka-proxy.protocol.per-connection-transformation-queue-capacity", "8");
         properties.put("kafka-proxy.request-logging.enabled", "true");
         properties.put("kafka-proxy.request-logging.base-directory", "./build/protocol-logs");
         properties.put("kafka-proxy.redis.host", "redis-test");

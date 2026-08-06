@@ -13,13 +13,13 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> {
-    private final BrokerConnectionFactory brokerConnectionFactory;
+    private final NettyBrokerConnectionFactory brokerConnectionFactory;
     private final ConnectionRegistry connectionRegistry;
     private final ChannelBackpressureController backpressureController;
     private final ConnectionProtocolContextFactory protocolContextFactory;
     private final int maxFrameSizeBytes;
 
-    public ClientChannelInitializer(BrokerConnectionFactory brokerConnectionFactory,
+    public ClientChannelInitializer(NettyBrokerConnectionFactory brokerConnectionFactory,
                                     ConnectionRegistry connectionRegistry,
                                     ChannelBackpressureController backpressureController,
                                     ConnectionProtocolContextFactory protocolContextFactory,
@@ -57,7 +57,7 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
             }
 
             ConnectionProtocolContext protocolContext = protocolContextFactory.create(clientChannel);
-            DefaultConnectionPair connectionPair = new DefaultConnectionPair(
+            ConnectionPair connectionPair = new ConnectionPair(
                     clientChannel, brokerConnectFuture.channel(), connectionRegistry, protocolContext);
             connectionRegistry.unregisterPending(clientChannel);
             if (!connectionRegistry.register(connectionPair)) {

@@ -4,21 +4,31 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 
 class OrderedTaskExecutor {
-    private final VirtualThreadExecutor executor;
+    private final TransformationExecutor executor;
+    private final int capacity;
     private final Queue<Runnable> tasks = new ArrayDeque<>();
     private boolean running;
 
-    OrderedTaskExecutor(VirtualThreadExecutor executor) {
+    OrderedTaskExecutor(TransformationExecutor executor, int capacity) {
         this.executor = executor;
+        this.capacity = capacity;
     }
 
-    synchronized void execute(Runnable task) {
+    synchronized boolean execute(Runnable task) {
+        if (tasks.size() >= capacity) return false;
         tasks.add(task);
         if (!running) {
             running = true;
-            executor.execute(this::drain);
+            if (!executor.tryExecute(this::drain)) {
+                running = false;
+                tasks.remove(task);
+                return false;
+            }
         }
+        return true;
     }
+
+    synchronized boolean isAtCapacity() { return tasks.size() >= capacity; }
 
     private void drain() {
         while (true) {

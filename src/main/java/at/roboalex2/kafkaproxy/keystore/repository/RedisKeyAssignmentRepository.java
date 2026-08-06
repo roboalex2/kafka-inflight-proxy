@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
@@ -75,11 +76,10 @@ public class RedisKeyAssignmentRepository implements KeyAssignmentRepository {
         execute(() -> redis.delete(RedisKeyNames.assignmentIndex(keyId)));
     }
 
-    private <T> T execute(ResultOperation<T> operation) {
-        try { return operation.execute(); } catch (DataAccessException exception) {
+    private <T> T execute(Supplier<T> operation) {
+        try { return operation.get(); } catch (DataAccessException exception) {
             throw new BackendServiceException(BackendErrorCode.REDIS_OPERATION_FAILED,
                     "Redis assignment operation failed", exception);
         }
     }
-    private interface ResultOperation<T> { T execute(); }
 }

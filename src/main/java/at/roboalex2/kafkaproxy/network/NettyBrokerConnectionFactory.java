@@ -10,7 +10,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.springframework.stereotype.Component;
 
 @Component
-public class NettyBrokerConnectionFactory implements BrokerConnectionFactory {
+public class NettyBrokerConnectionFactory {
     private final Endpoint upstreamBroker;
     private final int connectTimeoutMillis;
     private final BrokerChannelInitializer channelInitializer;
@@ -22,7 +22,6 @@ public class NettyBrokerConnectionFactory implements BrokerConnectionFactory {
         this.channelInitializer = channelInitializer;
     }
 
-    @Override
     public ChannelFuture connect(Channel clientChannel) {
         Bootstrap bootstrap = new Bootstrap()
                 .group(clientChannel.eventLoop())

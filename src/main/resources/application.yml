@@ -16,7 +16,12 @@ kafka-proxy:
     "[kafka-3:9092]": "localhost:19094"
   protocol:
     max-frame-size-bytes: 104857600
+    transformation-worker-threads: 8
+    transformation-executor-queue-capacity: 1024
+    per-connection-transformation-queue-capacity: 64
   request-logging:
+    # Diagnostic logs include ORIGINAL plaintext and transformed encrypted/decrypted record representations.
+    # Disable this for sensitive production traffic.
     enabled: true
     base-directory: "./logs/kafka-proxy"
   redis:

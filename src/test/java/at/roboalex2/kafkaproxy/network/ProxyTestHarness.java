@@ -5,10 +5,11 @@ import at.roboalex2.kafkaproxy.config.KafkaProxyProperties;
 import at.roboalex2.kafkaproxy.logging.ConnectionLogWriterFactory;
 import at.roboalex2.kafkaproxy.protocol.codec.ProtocolParser;
 import at.roboalex2.kafkaproxy.protocol.inspect.ConnectionProtocolContextFactory;
-import at.roboalex2.kafkaproxy.protocol.inspect.VirtualThreadExecutor;
+import at.roboalex2.kafkaproxy.protocol.inspect.TransformationExecutor;
 import at.roboalex2.kafkaproxy.protocol.mapping.ProtocolModelMapper;
 import at.roboalex2.kafkaproxy.protocol.serialization.KafkaProtocolMessageSerializer;
 import at.roboalex2.kafkaproxy.protocol.transform.MetadataEndpointTransformer;
+import at.roboalex2.kafkaproxy.protocol.transform.CryptoTransformTestFixture;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -16,9 +17,10 @@ import java.util.Map;
 
 final class ProxyTestHarness implements AutoCloseable {
     private final int listenPort;
-    private final DefaultConnectionRegistry connectionRegistry;
+    private final ConnectionRegistry connectionRegistry;
     private final NettyKafkaProxyServer server;
-    private final VirtualThreadExecutor inspectionExecutor;
+    private final TransformationExecutor inspectionExecutor;
+    private final CryptoTransformTestFixture crypto;
 
     ProxyTestHarness(int listenPort, int brokerPort) {
         this(listenPort, brokerPort, null);
@@ -41,17 +43,19 @@ final class ProxyTestHarness implements AutoCloseable {
             properties.getRequestLogging().setBaseDirectory(logDirectory);
         }
 
-        connectionRegistry = new DefaultConnectionRegistry();
+        connectionRegistry = new ConnectionRegistry();
         ChannelBackpressureController backpressureController = new ChannelBackpressureController();
         BrokerChannelInitializer brokerInitializer = new BrokerChannelInitializer(properties);
-        BrokerConnectionFactory brokerConnectionFactory =
+        NettyBrokerConnectionFactory brokerConnectionFactory =
                 new NettyBrokerConnectionFactory(properties, brokerInitializer);
-        inspectionExecutor = new VirtualThreadExecutor();
+        inspectionExecutor = new TransformationExecutor(properties);
         ProtocolModelMapper modelMapper = new ProtocolModelMapper();
+        crypto = new CryptoTransformTestFixture();
         ConnectionProtocolContextFactory protocolContextFactory = new ConnectionProtocolContextFactory(
                 new ProtocolParser(modelMapper), new ConnectionLogWriterFactory(properties),
                 new ObjectMapper(), inspectionExecutor, new MetadataEndpointTransformer(properties),
-                new KafkaProtocolMessageSerializer(), modelMapper);
+                crypto.produceTransformer, crypto.fetchTransformer, crypto.topicIdentityResolver,
+                new KafkaProtocolMessageSerializer(), modelMapper, properties);
         ClientChannelInitializer clientInitializer = new ClientChannelInitializer(
                 brokerConnectionFactory, connectionRegistry, backpressureController,
                 protocolContextFactory, properties);
@@ -70,6 +74,8 @@ final class ProxyTestHarness implements AutoCloseable {
     int getListenPort() {
         return listenPort;
     }
+
+    CryptoTransformTestFixture crypto() { return crypto; }
 
     @Override
     public void close() {

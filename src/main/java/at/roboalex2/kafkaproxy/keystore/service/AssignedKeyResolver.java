@@ -5,6 +5,8 @@ import at.roboalex2.kafkaproxy.api.error.BackendServiceException;
 import at.roboalex2.kafkaproxy.keystore.model.AssignedKey;
 import at.roboalex2.kafkaproxy.keystore.model.AssignmentId;
 import at.roboalex2.kafkaproxy.keystore.model.KeyAssignment;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /** Performs fresh repository reads on every call; deliberately contains no assignment or DEK cache. */
@@ -35,5 +37,10 @@ public class AssignedKeyResolver {
         AssignedKey generated = keys.generateAndStoreForImmediateUse();
         assignments.assign(id, generated.getKeyId());
         return generated;
+    }
+
+    /** Performs a fresh wrapped-key lookup and unwrap for Fetch; missing material is not regenerated. */
+    public Optional<AssignedKey> resolveKey(UUID keyId) {
+        return keys.resolve(keyId);
     }
 }

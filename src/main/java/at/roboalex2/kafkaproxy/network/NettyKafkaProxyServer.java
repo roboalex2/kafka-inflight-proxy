@@ -12,13 +12,14 @@ import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.util.concurrent.TimeUnit;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnProperty(prefix = "kafka-proxy.server", name = "enabled",
         havingValue = "true", matchIfMissing = true)
-public class NettyKafkaProxyServer implements KafkaProxyServer {
+public class NettyKafkaProxyServer implements SmartLifecycle {
     private final Endpoint listenEndpoint;
     private final ClientChannelInitializer clientChannelInitializer;
     private final ConnectionRegistry connectionRegistry;

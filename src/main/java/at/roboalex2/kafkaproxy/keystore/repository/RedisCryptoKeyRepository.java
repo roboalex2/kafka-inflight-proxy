@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
@@ -51,12 +52,11 @@ public class RedisCryptoKeyRepository implements CryptoKeyRepository {
     private void execute(Runnable operation) {
         try { operation.run(); } catch (DataAccessException exception) { throw redisFailure(exception); }
     }
-    private <T> T executeWithResult(ResultOperation<T> operation) {
-        try { return operation.execute(); } catch (DataAccessException exception) { throw redisFailure(exception); }
+    private <T> T executeWithResult(Supplier<T> operation) {
+        try { return operation.get(); } catch (DataAccessException exception) { throw redisFailure(exception); }
     }
     private BackendServiceException redisFailure(Exception cause) {
         return new BackendServiceException(BackendErrorCode.REDIS_OPERATION_FAILED,
                 "Redis key-store operation failed", cause);
     }
-    private interface ResultOperation<T> { T execute(); }
 }

@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.junit.jupiter.api.Test;
-import org.apache.kafka.common.message.FetchResponseData;
 
 class MetadataEndpointTransformerTest {
     @Test
@@ -21,7 +20,7 @@ class MetadataEndpointTransformerTest {
                 new Endpoint("broker-a", 9092), new Endpoint("proxy-a", 19092),
                 new Endpoint("broker-b", 9093), new Endpoint("proxy-b", 19093)));
 
-        transformer.transform((short) 3, (short) 13, response);
+        transformer.transform(response, (short) 13);
 
         assertThat(response.brokers().find(1).host()).isEqualTo("proxy-a");
         assertThat(response.brokers().find(1).port()).isEqualTo(19092);
@@ -42,20 +41,13 @@ class MetadataEndpointTransformerTest {
         MetadataEndpointTransformer transformer = transformer(Map.of(
                 new Endpoint("broker-a", 9092), new Endpoint("proxy-a", 19092)));
 
-        assertThatThrownBy(() -> transformer.transform((short) 3, (short) 13, response))
+        assertThatThrownBy(() -> transformer.transform(response, (short) 13))
                 .isInstanceOf(MissingBrokerMappingException.class)
                 .hasMessageContaining("broker-b:9093");
         assertThat(response.brokers().find(1).host()).isEqualTo("broker-a");
         assertThat(response.brokers().find(1).port()).isEqualTo(9092);
         assertThat(response.brokers().find(2).host()).isEqualTo("broker-b");
         assertThat(response.brokers().find(2).port()).isEqualTo(9093);
-    }
-
-    @Test
-    void leavesEveryNonMetadataMessageUntouched() {
-        FetchResponseData fetch = new FetchResponseData().setThrottleTimeMs(11);
-        assertThat(transformer(Map.of()).transform((short) 1, (short) 18, fetch)).isSameAs(fetch);
-        assertThat(fetch.throttleTimeMs()).isEqualTo(11);
     }
 
     private MetadataEndpointTransformer transformer(Map<Endpoint, Endpoint> mappings) {
