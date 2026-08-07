@@ -35,6 +35,9 @@ public class ConnectionPair implements AutoCloseable {
     public Channel getClientChannel() { return clientChannel; }
     public Channel getBrokerChannel() { return brokerChannel; }
     public boolean isClosed() { return closed.get(); }
+    public boolean isTransformationQueueAtCapacity() {
+        return protocolContext != null && protocolContext.isTransformationQueueAtCapacity();
+    }
 
     @Override
     public void close() {

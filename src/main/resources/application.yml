@@ -12,18 +12,20 @@ kafka-proxy:
     connect-timeout-millis: 10000
   broker-proxy-addresses:
     "[localhost:9092]": "localhost:19092"
-    "[kafka-2:9092]": "localhost:19093"
-    "[kafka-3:9092]": "localhost:19094"
+    "[localhost:9093]": "localhost:19093"
+    "[localhost:9094]": "localhost:19094"
   protocol:
     max-frame-size-bytes: 104857600
     transformation-worker-threads: 8
     transformation-executor-queue-capacity: 1024
-    per-connection-transformation-queue-capacity: 64
+    per-connection-transformation-queue-capacity: 32
   request-logging:
-    # Diagnostic logs include ORIGINAL plaintext and transformed encrypted/decrypted record representations.
-    # Disable this for sensitive production traffic.
     enabled: true
     base-directory: "./logs/kafka-proxy"
+  crypto:
+    key-encryption-key: "${KAFKA_PROXY_KEK}"
+    encryption-key-header-name: "encryption-key"
+    encryption-iv-header-name: "encryption-iv"
   redis:
     host: "localhost"
     port: 6379
@@ -32,7 +34,3 @@ kafka-proxy:
     password: null
     connect-timeout: 2s
     command-timeout: 2s
-  crypto:
-    key-encryption-key: "${KAFKA_PROXY_KEK}"
-    encryption-key-header-name: "encryption-key"
-    encryption-iv-header-name: "encryption-iv"

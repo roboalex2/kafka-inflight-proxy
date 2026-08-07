@@ -68,17 +68,16 @@ public class ClientChannelInitializer extends ChannelInitializer<SocketChannel> 
 
             clientChannel.pipeline().addLast("protocolInspection",
                     new ProtocolInspectionHandler(protocolContext, TrafficDirection.CLIENT_TO_BROKER,
-                            connectionPair));
+                            connectionPair, backpressureController));
             clientChannel.pipeline().addLast("clientToBroker",
                     new ClientToBrokerHandler(connectionPair, backpressureController));
             brokerConnectFuture.channel().pipeline().addLast("protocolInspection",
                     new ProtocolInspectionHandler(protocolContext, TrafficDirection.BROKER_TO_CLIENT,
-                            connectionPair));
+                            connectionPair, backpressureController));
             brokerConnectFuture.channel().pipeline().addLast("brokerToClient",
                     new BrokerToClientHandler(connectionPair, backpressureController));
 
-            clientChannel.config().setAutoRead(true);
-            brokerConnectFuture.channel().config().setAutoRead(true);
+            backpressureController.updateConnectionReading(connectionPair);
         });
     }
 }

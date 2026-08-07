@@ -3,16 +3,29 @@ package at.roboalex2.kafkaproxy.network;
 import io.netty.channel.Channel;
 import org.springframework.stereotype.Component;
 
-/** Pauses a source channel while its destination has crossed the write high-water mark. */
+/** The single owner of auto-read state for both channels in a connection pair. */
 @Component
 public class ChannelBackpressureController {
-    public void updateSourceReading(Channel sourceChannel, Channel destinationChannel) {
-        setSourceReading(sourceChannel, destinationChannel.isActive() && destinationChannel.isWritable());
+    public void updateConnectionReading(ConnectionPair connectionPair) {
+        updateSourceReading(connectionPair.getClientChannel(), connectionPair.getBrokerChannel(), connectionPair);
+        updateSourceReading(connectionPair.getBrokerChannel(), connectionPair.getClientChannel(), connectionPair);
     }
 
-    void setSourceReading(Channel sourceChannel, boolean enabled) {
-        if (sourceChannel.isOpen() && sourceChannel.config().isAutoRead() != enabled) {
-            sourceChannel.config().setAutoRead(enabled);
+    private void updateSourceReading(Channel sourceChannel, Channel destinationChannel,
+                                     ConnectionPair connectionPair) {
+        Runnable update = () -> {
+            boolean enabled = sourceChannel.isActive()
+                    && destinationChannel.isActive()
+                    && destinationChannel.isWritable()
+                    && !connectionPair.isTransformationQueueAtCapacity();
+            if (sourceChannel.isOpen() && sourceChannel.config().isAutoRead() != enabled) {
+                sourceChannel.config().setAutoRead(enabled);
+            }
+        };
+        if (sourceChannel.eventLoop().inEventLoop()) {
+            update.run();
+        } else {
+            sourceChannel.eventLoop().execute(update);
         }
     }
 }

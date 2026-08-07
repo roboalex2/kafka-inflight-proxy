@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
+import at.roboalex2.kafkaproxy.network.ChannelBackpressureController;
 import at.roboalex2.kafkaproxy.network.ConnectionPair;
 import java.util.function.Consumer;
 
@@ -12,12 +13,15 @@ public class ProtocolInspectionHandler extends ChannelInboundHandlerAdapter {
     private final ConnectionProtocolContext protocolContext;
     private final TrafficDirection direction;
     private final ConnectionPair connectionPair;
+    private final ChannelBackpressureController backpressureController;
 
     public ProtocolInspectionHandler(ConnectionProtocolContext protocolContext, TrafficDirection direction,
-                                     ConnectionPair connectionPair) {
+                                     ConnectionPair connectionPair,
+                                     ChannelBackpressureController backpressureController) {
         this.protocolContext = protocolContext;
         this.direction = direction;
         this.connectionPair = connectionPair;
+        this.backpressureController = backpressureController;
     }
 
     @Override
@@ -32,9 +36,7 @@ public class ProtocolInspectionHandler extends ChannelInboundHandlerAdapter {
                     }
                 });
             Runnable completed = () -> context.executor().execute(() -> {
-                if (context.channel().isActive() && !protocolContext.isTransformationQueueAtCapacity()) {
-                    context.channel().config().setAutoRead(true);
-                }
+                backpressureController.updateConnectionReading(connectionPair);
             });
             boolean accepted;
             if (direction == TrafficDirection.BROKER_TO_CLIENT) {
@@ -44,8 +46,8 @@ public class ProtocolInspectionHandler extends ChannelInboundHandlerAdapter {
             }
             if (!accepted) {
                 connectionPair.close();
-            } else if (protocolContext.isTransformationQueueAtCapacity()) {
-                context.channel().config().setAutoRead(false);
+            } else {
+                backpressureController.updateConnectionReading(connectionPair);
             }
             return;
         }

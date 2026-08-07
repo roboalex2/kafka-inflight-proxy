@@ -39,8 +39,7 @@ abstract class AbstractFrameRelayHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelWritabilityChanged(ChannelHandlerContext context) {
-        Channel oppositeSource = destination(connectionPair);
-        backpressureController.updateSourceReading(oppositeSource, context.channel());
+        backpressureController.updateConnectionReading(connectionPair);
         context.fireChannelWritabilityChanged();
     }
 
