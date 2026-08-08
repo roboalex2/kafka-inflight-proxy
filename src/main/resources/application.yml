@@ -11,9 +11,9 @@ kafka-proxy:
     enabled: true
     connect-timeout-millis: 10000
   broker-proxy-addresses:
-    "[localhost:9092]": "localhost:19092"
-    "[localhost:9093]": "localhost:19093"
-    "[localhost:9094]": "localhost:19094"
+    "[kafka-1:9092]": "localhost:19092"
+    "[kafka-2:9093]": "localhost:19093"
+    "[kafka-3:9094]": "localhost:19094"
   protocol:
     max-frame-size-bytes: 104857600
     transformation-worker-threads: 8
